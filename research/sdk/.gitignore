@@ -1,0 +1,7 @@
+# Rust build output (the crate is shipped as source; authors build it)
+target/
+**/target/
+Cargo.lock
+# stray object files / OS cruft
+*.o
+.DS_Store
