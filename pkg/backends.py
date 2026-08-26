@@ -1,9 +1,36 @@
-"""Tested keyless search backends. stdlib only; urllib only. Each returns [{title,url,snippet}]."""
-import gzip, html as _html, json, re, socket, ssl, time, zlib
-import urllib.error, urllib.parse, urllib.request
+"""Tested keyless search backends. stdlib only. Each returns [{title,url,snippet}].
+
+EVERY request here goes through netguard. That is not decoration: search URLs are ours rather than
+the model's, so a host allowlist is meaningful, but the hosts still answer with THEIR redirects.
+An earlier version of this file called urllib directly, which meant search traffic -- unlike
+web_fetch -- was never re-validated after a hop, so a search host answering 302 to an internal
+address would have been followed. There is deliberately no unguarded code path left: the policy is
+installed at import, so forgetting to wire it cannot silently reopen that hole.
+"""
+import html as _html, json, re, time
+import urllib.parse
+
+import netguard
 
 UA = "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
 MAX_BYTES = 2 * 1024 * 1024
+
+# Default policy, covering every host any backend in this file can reach -- including the two
+# (old-search.marginalia.nu, wiby.me) that only research/ scripts use, so those keep working.
+# tool.py installs a NARROWER policy over this via use_policy(): the shipped tool reaches only the
+# three backends it actually calls. Defence in depth, and the tight list stays next to the manifest.
+_POLICY = netguard.Policy(
+    allow_hosts=("html.duckduckgo.com", "api.marginalia.nu", "api.mwmbl.org",
+                 "old-search.marginalia.nu", "wiby.me"),
+    allowed_ports=(443,), max_redirects=2, max_bytes=MAX_BYTES,
+    total_timeout_s=12.0, user_agent=UA,
+)
+
+
+def use_policy(policy):
+    """Install the network policy every backend request is validated against."""
+    global _POLICY
+    _POLICY = policy
 
 
 class Blocked(Exception):
@@ -11,30 +38,26 @@ class Blocked(Exception):
 
 
 def _get(url, data=None, headers=None, timeout=8.0, max_bytes=MAX_BYTES):
-    h = {"User-Agent": UA,
-         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-         "Accept-Language": "en-GB,en;q=0.5",
-         "Accept-Encoding": "gzip, deflate"}
-    if headers:
-        h.update(headers)
-    if isinstance(data, dict):
-        data = urllib.parse.urlencode(data).encode()
-    req = urllib.request.Request(url, data=data, headers=h)
-    try:
-        r = urllib.request.urlopen(req, timeout=timeout)
-        raw, hdrs, code = r.read(max_bytes + 1), r.headers, r.status
-    except urllib.error.HTTPError as e:
-        raw, hdrs, code = e.read(max_bytes + 1), e.headers, e.code
-    if len(raw) > max_bytes:
-        raw = raw[:max_bytes]
-    enc = (hdrs.get("Content-Encoding", "") or "").lower()
-    if enc == "gzip":
-        try: raw = gzip.decompress(raw)
-        except Exception: pass
-    elif enc == "deflate":
-        try: raw = zlib.decompress(raw, -zlib.MAX_WBITS)
-        except Exception: pass
-    return code, raw
+    """GET under the installed policy. Returns (status, body_bytes), same shape as before.
+
+    `headers` is accepted and ignored: netguard builds its own header set, and its Accept already
+    covers both the HTML and the JSON endpoints here. `data` is rejected outright rather than
+    silently dropped -- netguard permits GET/HEAD only, and a POST that quietly became a GET would
+    be a worse bug than a loud failure. No backend in this file posts.
+    """
+    if data is not None:
+        raise ValueError("_get is GET-only under netguard; POST is not supported")
+    # netguard applies its own caps; the per-call ones are advisory and we take the tighter.
+    policy = _POLICY
+    if timeout and timeout < policy.total_timeout_s:
+        policy = netguard.Policy(
+            allow_hosts=policy.allow_hosts, allowed_ports=policy.allowed_ports,
+            max_redirects=policy.max_redirects,
+            max_bytes=min(max_bytes, policy.max_bytes),
+            total_timeout_s=timeout, user_agent=policy.user_agent,
+        )
+    r = netguard.fetch(url, policy)   # re-validates the resolved IP at EVERY redirect hop
+    return r.status, r.body
 
 
 def _txt(s):

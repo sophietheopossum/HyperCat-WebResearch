@@ -30,7 +30,11 @@ import hypercat_tool
 _SEARCH_POLICY = netguard.Policy(
     allow_hosts=("html.duckduckgo.com", "api.marginalia.nu", "api.mwmbl.org"),
     allowed_ports=(443,), max_redirects=2, max_bytes=2 * 1024 * 1024, total_timeout_s=12.0,
+    user_agent=backends.UA,   # DuckDuckGo serves an anomaly page to a non-browser UA
 )
+# Install it. This line is what makes the policy above real -- it was defined and never applied
+# once, and search consequently ran on bare urllib with no redirect re-validation at all.
+backends.use_policy(_SEARCH_POLICY)
 
 # web_fetch takes a URL FROM THE MODEL, so no name allowlist can apply. The protections are the
 # IP classification (private/loopback/link-local/cloud-metadata all refused), https-only, one port,
@@ -72,9 +76,9 @@ def web_search(args):
 
     # DuckDuckGo first: the only keyless option with real coverage. It blocks with HTTP *202* and an
     # anomaly page, so backends detects a block by the RESULT MARKER, never the status code. On a
-    # block: one retry inside the backend, then fall through -- Marginalia and Mwmbl fail
-    # independently (they stall or return empty; they do not IP-block), so the chain is not three
-    # rolls of the same die. Retrying DDG harder only extends the block.
+    # block it falls straight through -- there is no retry, here or in the backend -- because
+    # Marginalia and Mwmbl fail independently (they stall or return empty; they do not IP-block),
+    # so the chain is not three rolls of the same die. Retrying DDG harder only extends the block.
     errs = []
     for name, fn in (("duckduckgo", backends.ddg_html),
                      ("marginalia", backends.marginalia),
