@@ -13,7 +13,7 @@ except N.Blocked as e: print("mixed answer  ->", e)
 # --- 2. exactly ONE resolution per hop, and the connect goes to the vetted sockaddr (no re-resolve)
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version="HTTP/1.1"
-    def log_message(self,*a): pass
+    def log_message(self, format, *args): pass
     def do_GET(self):
         b=b"<html><p>pinned</p></html>"
         self.send_response(200); self.send_header("Content-Type","text/html")

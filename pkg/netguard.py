@@ -131,7 +131,7 @@ def classify_ip(ip):
             ip = ipaddress.ip_address(ip)
         except ValueError:
             return "deny:unparseable"
-    if ip.version == 4:
+    if isinstance(ip, ipaddress.IPv4Address):
         return _classify_v4(ip)
 
     if getattr(ip, "scope_id", None):
@@ -300,7 +300,7 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
         except OSError:
             sock.close()
             raise
-        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)  # pyright: ignore[reportAttributeAccessIssue]
 
 
 class _PinnedHTTPConnection(http.client.HTTPConnection):
@@ -396,7 +396,7 @@ def fetch(url, policy, method="GET", _resolver=None):
                 continue
             conn, resp = c, r
             break
-        if resp is None:
+        if conn is None or resp is None:
             raise FetchError("could not reach %s (%s)" % (host, "; ".join(errs)))
 
         try:

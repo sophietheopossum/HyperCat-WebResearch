@@ -4,7 +4,7 @@ import netguard as N
 # A) rebinding ACROSS a redirect: hop1 resolves good, hop2 (same host) flips to the metadata IP
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version="HTTP/1.1"
-    def log_message(self,*a): pass
+    def log_message(self, format, *args): pass
     def do_GET(self):
         if self.path=="/hop": self.send_response(302); self.send_header("Location","/final"); self.send_header("Content-Length","0"); self.end_headers()
         elif self.path=="/chunked":

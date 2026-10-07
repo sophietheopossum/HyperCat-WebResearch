@@ -5,7 +5,7 @@ BODY_HTML = b"<html><head><title>ok</title></head><body><p>real content here</p>
 
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    def log_message(self, *a): pass
+    def log_message(self, format, *args): pass
     def _send(self, code, headers, body=b""):
         self.send_response(code)
         for k,v in headers.items(): self.send_header(k,v)
@@ -14,7 +14,7 @@ class H(http.server.BaseHTTPRequestHandler):
         if body: self.wfile.write(body)
     def do_GET(self):
         p = self.path
-        port = self.server.server_address[1]
+        port = self.server.server_address[1]  # pyright: ignore[reportIndexIssue]  # a TCP server: (host, port)
         if p == "/ok":              self._send(200, {"Content-Type":"text/html"}, BODY_HTML)
         elif p == "/meta":          self._send(302, {"Location":"http://169.254.169.254/latest/meta-data/"})
         elif p == "/file":          self._send(302, {"Location":"file:///etc/passwd"})
