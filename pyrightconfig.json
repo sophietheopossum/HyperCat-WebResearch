@@ -1,0 +1,5 @@
+{
+  "executionEnvironments": [
+    { "root": "research/sdk/examples", "extraPaths": ["research/sdk/python"] }
+  ]
+}
